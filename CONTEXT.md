@@ -1,30 +1,28 @@
 # Starbridge
 
-Starbridge supervises authorized repository work performed by a coding agent, from issue selection to validated pull-request handoff.
+Starbridge starts authorized repository work in a coding-agent session, then hands control to the human. It does not supervise the work after launch.
 
 ## Language
 
 **Mission**:
-One authorized backlog task and its supervised progress toward a validated pull request. A mission can remain unfinished without currently executing.
-
-**Executing mission**:
-The mission currently permitted to run its coding agent; at most one exists per repository.
-_Avoid_: Active mission (ambiguous between executing and unfinished)
-
-**Held mission**:
-An unfinished mission awaiting human attention, with its workspace retained. Its coding agent must be stopped before another mission executes.
-
-**Completed mission**:
-A mission whose validated pull request has been handed off for human review. Completion does not mean the change has been merged.
+One authorized backlog task and the work performed for it by a coding agent. Its progress after launch belongs to the agent and human, not Starbridge.
 
 **Run**:
-One invocation of the supervisor that may try multiple missions but ends after one successful pull-request handoff, no eligible work remains, or a supervisor-level failure.
+One invocation of Starbridge that attempts to launch at most one new mission, then exits. It does not wait for the mission's result.
 
 **Eligible issue**:
-A human-authorized backlog item ready for agent work and not marked as requiring human attention.
+An open, human-authorized backlog item that is not already marked as started, awaiting human attention, or handed off.
+
+**Started mission**:
+A mission marked for dispatch so later runs do not automatically launch it again. This marker does not prove that launch succeeded or that an agent is still running.
+
+**Awaiting-input mission**:
+An unfinished mission whose agent has requested human attention. Its session may remain open, and the human resumes it directly.
+_Avoid_: Held mission (previously implied confirmed agent termination)
 
 **Mission worktree**:
-The isolated repository workspace belonging to a mission, which may be retained after execution stops for inspection or recovery.
+The dedicated repository workspace belonging to a mission, retained for agent work and manual inspection, resumption, or cleanup.
 
-**Validated pull request**:
-A proposed change for which the configured local repository checks have passed. This does not imply successful remote CI, human approval, or merge.
+**Agent-reported handoff**:
+A pull request and check summary supplied by the agent for human review. Starbridge has not independently verified the result; handoff does not mean approval or merge.
+_Avoid_: Validated completion, supervised completion

@@ -2,6 +2,8 @@
 
 Research for [Verify Herdr and pi capabilities required by the MVP](https://github.com/smotastic/starbridge/issues/2), within [Starbridge v0.1 — MVP scope and feasibility map](https://github.com/smotastic/starbridge/issues/1).
 
+> **Scope update:** The later [starter decision](https://github.com/smotastic/starbridge/issues/3#issuecomment-5560000957) replaced automated supervision with launch-and-exit behavior and human-owned sessions. This research is retained as historical, versioned evidence. Its launch and workspace findings remain relevant; its extension, stop-confirmation, and recovery options are not current MVP requirements. See the [current specification](../../Starbridge%20v0.1%20Specification.md).
+
 ## Finding
 
 **A plausible integration exists, but Herdr status alone cannot implement the unattended promise.** Herdr provides persistent terminals, interactive launch/input, runtime snapshots, and native pi conversation references. Pi provides lifecycle events and extension tools suitable for explicit mission reports. Neither supplies Starbridge's mission success semantics, repository-wide execution ownership, durable delivery acknowledgements, or a confirmed whole-mission termination primitive. These remain design choices, not facts established by this research. [H1–H6, P1–P5]
