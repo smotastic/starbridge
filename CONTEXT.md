@@ -20,6 +20,12 @@ A mission marked for dispatch so later runs do not automatically launch it again
 An unfinished mission whose agent has requested human attention. Its session may remain open, and the human resumes it directly.
 _Avoid_: Held mission (previously implied confirmed agent termination)
 
+**Manual resumption**:
+Continuing an existing mission directly with its agent session, without authorizing a fresh dispatch. The mission remains marked as started.
+
+**Dispatch reset**:
+A human's deliberate reauthorization for a fresh dispatch after inspecting the previous attempt and ensuring its agent will not continue the same work. It is not resumption or proof of safety verified by Starbridge.
+
 **Mission worktree**:
 The dedicated repository workspace belonging to a mission, retained for agent work and manual inspection, resumption, or cleanup.
 

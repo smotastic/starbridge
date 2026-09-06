@@ -42,7 +42,7 @@ Starbridge does not prescribe or track specification, planning, TDD, or implemen
 
 A normal invocation:
 
-1. Selects the oldest eligible open issue.
+1. Selects the oldest eligible open issue by creation time ascending, then issue number ascending for ties. Adding or restoring authorization does not change its position.
 2. Adds `starbridge:started` before launching an agent.
 3. Prepares a dedicated branch/worktree, never the primary checkout as the agent's mutable workspace.
 4. Starts a new Herdr/pi session in that worktree and passes the GitHub issue reference plus generic reporting instructions.
@@ -64,19 +64,23 @@ This permits overlapping agent sessions; it does not settle the separate questio
 | `starbridge:hitl` | Agent needs human input | Agent adds; human removes when resuming |
 | `starbridge:done` | Agent reports PR handoff, not independently verified success | Agent |
 
-Eligibility requires an open issue with `starbridge:ready` and none of `starbridge:started`, `starbridge:hitl`, or `starbridge:done`.
+Eligibility requires an open issue with `starbridge:ready` and none of `starbridge:started`, `starbridge:hitl`, or `starbridge:done`. Exclusion markers always win, even for inconsistent combinations such as ready + done without started; Starbridge does not repair labels. Closed issues are excluded. Reopening clears no markers: a reopened ready issue without exclusions is eligible, while a reopened started issue remains excluded.
+
+These conventions are settled in [Define starter eligibility and manual resumption conventions](https://github.com/smotastic/starbridge/issues/5#issuecomment-5561557791).
 
 `starbridge:started` remains through questions, manual resumption, and PR handoff. It is a duplicate-selection guard, not evidence of successful launch, liveness, process termination, or completion. It is not an atomic lock for concurrent CLI invocations.
 
-If dispatch fails or crashes after the marker is written, retain it for manual inspection rather than automatically relaunching. The human checks what exists before deliberately resetting a failed dispatch. Exact recovery guidance and failure output remain to be decided.
+If dispatch fails or crashes after the marker is written, retain it for manual inspection rather than automatically relaunching. The human checks what exists before deliberately resetting a failed dispatch. To reset, the human first inspects retained sessions/worktrees and ensures an earlier agent will not continue the same work, then deliberately removes exclusion labels and retains/adds `starbridge:ready`. Starbridge does not verify reset safety. Preserve previous comments and resource references, and add a reset comment explaining why a fresh dispatch is safe and what happened to earlier resources. Exact launch-failure breadcrumbs and failure output remain to be decided.
 
-The earlier convention that agent-reported PR handoff removes `starbridge:ready` remains the baseline. `starbridge:started` stays present regardless; inconsistent-label examples and exact agent update ordering remain for the label/reporting decisions.
+The earlier convention that agent-reported PR handoff removes `starbridge:ready` remains the baseline. `starbridge:started` stays present regardless; exact agent update ordering remains for the reporting decision.
 
 ## 6. Questions and manual resumption
 
 When blocked, the agent comments on the issue with the question or blocker and adds `starbridge:hitl`. Its Herdr/pi session and worktree may remain available; no confirmed stopping is required.
 
 The human supplies the answer, resumes the existing agent directly in Herdr, and manually removes `starbridge:hitl`. Removing the label does not trigger another launch because `starbridge:started` remains present.
+
+The agent reads the current issue when beginning. Subsequent issue edits require the human to notify the existing session; edits neither trigger relaunch nor guarantee that the agent notices. Manual resumption continues that mission with started retained; a dispatch reset instead reauthorizes a fresh dispatch under the inspection guidance above.
 
 Starbridge does not poll for replies, deliver answers, resume sessions, detect human interference, or require a gate before interaction. An awaiting-input mission does not prevent a subsequent run from starting another eligible issue.
 
@@ -111,7 +115,6 @@ Scheduling stays external, for example manual invocation, cron, or a systemd tim
 The map's open child tickets are authoritative for remaining work. Areas still requiring decisions are:
 
 - [Define the starter launch boundary and partial-failure behavior](https://github.com/smotastic/starbridge/issues/9).
-- [Define starter eligibility and manual resumption conventions](https://github.com/smotastic/starbridge/issues/5).
 - [Define the minimal agent question and PR handoff instructions](https://github.com/smotastic/starbridge/issues/6).
 - [Set the minimal starter CLI and setup contract](https://github.com/smotastic/starbridge/issues/7).
 - [Agree the starter release-proof scenarios and scope completeness](https://github.com/smotastic/starbridge/issues/10).
