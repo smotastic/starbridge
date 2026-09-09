@@ -17,7 +17,7 @@ An open, human-authorized backlog item that is not already marked as started, aw
 A mission marked for dispatch so later runs do not automatically launch it again. This marker does not prove that launch succeeded or that an agent is still running.
 
 **Awaiting-input mission**:
-An unfinished mission whose agent has requested human attention. Its session may remain open, and the human resumes it directly.
+An unfinished mission that needs human attention because the agent requested input or Starbridge reported a failed or uncertain launch. An agent session may or may not exist; the human inspects the available records before resuming or resetting dispatch.
 _Avoid_: Held mission (previously implied confirmed agent termination)
 
 **Manual resumption**:
@@ -30,5 +30,5 @@ A human's deliberate reauthorization for a fresh dispatch after inspecting the p
 The dedicated repository workspace belonging to a mission, retained for agent work and manual inspection, resumption, or cleanup.
 
 **Agent-reported handoff**:
-A pull request and check summary supplied by the agent for human review. Starbridge has not independently verified the result; handoff does not mean approval or merge.
-_Avoid_: Validated completion, supervised completion
+Completed requested work supplied in a pull request ready for human review, with an honest check summary. Checks can fail if the report clearly states the failures; a draft pull request or incomplete work is not a handoff. Starbridge has not independently verified the result; handoff does not mean approval or merge.
+_Avoid_: Done, validated completion, supervised completion

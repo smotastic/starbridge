@@ -2,7 +2,7 @@
 
 ## Status and source of truth
 
-This is the agreed **starter** scope, not an implementation plan or a fully settled launch contract. It replaces the original autonomous-supervisor specification and the earlier charting baseline where they conflict.
+This is the agreed **starter** scope, not an implementation plan or a fully settled CLI contract. It replaces the original autonomous-supervisor specification and the earlier charting baseline where they conflict.
 
 The canonical decision index is [Starbridge v0.1 — MVP scope and feasibility map](https://github.com/smotastic/starbridge/issues/1). The scope change was confirmed through [Choose a trustworthy mission supervision contract](https://github.com/smotastic/starbridge/issues/3#issuecomment-5560000957). Detailed decisions live in their tracker tickets; this document summarizes the product requirements. Remaining questions below must be settled before implementation planning.
 
@@ -42,10 +42,10 @@ Starbridge does not prescribe or track specification, planning, TDD, or implemen
 
 A normal invocation:
 
-1. Selects the oldest eligible open issue by creation time ascending, then issue number ascending for ties. Adding or restoring authorization does not change its position.
-2. Adds `starbridge:started` before launching an agent.
+1. Acquires the repository launch lock, checks prerequisites, then selects and rechecks the oldest eligible open issue by creation time ascending, then issue number ascending for ties. Adding or restoring authorization does not change its position.
+2. Creates the persistent local attempt record, then adds and confirms `starbridge:started` before creating the worktree or launching an agent.
 3. Prepares a dedicated branch/worktree, never the primary checkout as the agent's mutable workspace.
-4. Starts a new Herdr/pi session in that worktree and passes the GitHub issue reference plus generic reporting instructions.
+4. Starts a new Herdr/pi session in that new dedicated Git worktree. The launch prompt supplies the issue reference, workspace, reporting obligations, and boundaries. It tells the agent to read the current issue and repository instructions, work on the issue, choose its workflow, run relevant checks, report questions or handoff, and never merge.
 5. Records the Herdr session reference, branch, and worktree path in an issue comment.
 6. Exits without waiting for a question, checks, or a PR.
 
@@ -53,7 +53,7 @@ A run attempts at most one new mission. It does not retry other issues after a f
 
 After launch, sessions belong to the human rather than a Starbridge supervisor. A later CLI invocation can start another eligible issue even if earlier agents remain open or are still working. There is no repository-wide single-executing-agent guarantee, stop protocol, or human-intervention gate.
 
-This permits overlapping agent sessions; it does not settle the separate question of simultaneous CLI invocations racing to dispatch the same issue. The launch-boundary decision must address that explicitly.
+Support one configured launch host per repository. All runs for that repository, including different checkouts, share a host-managed launch lock. A competing run exits without launch changes. The lock covers launch and reporting and releases when Starbridge exits, including a crash; it does not cover the agent's lifetime. Separate launch hosts are unsupported. An external operation may continue after Starbridge exits; the retained started marker prevents later automatic selection of that issue.
 
 ## 5. Label contract
 
@@ -61,22 +61,24 @@ This permits overlapping agent sessions; it does not settle the separate questio
 | --- | --- | --- |
 | `starbridge:ready` | Human authorization for a new launch | Human |
 | `starbridge:started` | Already marked for dispatch; exclude from future automatic selection | Starbridge before launch; manual recovery only |
-| `starbridge:hitl` | Agent needs human input | Agent adds; human removes when resuming |
-| `starbridge:done` | Agent reports PR handoff, not independently verified success | Agent |
+| `starbridge:hitl` | Mission needs human attention, including a failed or uncertain launch | Agent or Starbridge adds; human removes during resumption or deliberate reset |
+| `starbridge:handoff` | Agent reports work ready for human review, not independently verified success | Agent |
 
-Eligibility requires an open issue with `starbridge:ready` and none of `starbridge:started`, `starbridge:hitl`, or `starbridge:done`. Exclusion markers always win, even for inconsistent combinations such as ready + done without started; Starbridge does not repair labels. Closed issues are excluded. Reopening clears no markers: a reopened ready issue without exclusions is eligible, while a reopened started issue remains excluded.
+Eligibility requires an open issue with `starbridge:ready` and none of `starbridge:started`, `starbridge:hitl`, or `starbridge:handoff`. Exclusion markers always win, even for inconsistent combinations such as ready + handoff without started; Starbridge does not repair labels. Closed issues are excluded. Reopening clears no markers: a reopened ready issue without exclusions is eligible, while a reopened started issue remains excluded.
 
 These conventions are settled in [Define starter eligibility and manual resumption conventions](https://github.com/smotastic/starbridge/issues/5#issuecomment-5561557791).
 
 `starbridge:started` remains through questions, manual resumption, and PR handoff. It is a duplicate-selection guard, not evidence of successful launch, liveness, process termination, or completion. It is not an atomic lock for concurrent CLI invocations.
 
-If dispatch fails or crashes after the marker is written, retain it for manual inspection rather than automatically relaunching. The human checks what exists before deliberately resetting a failed dispatch. To reset, the human first inspects retained sessions/worktrees and ensures an earlier agent will not continue the same work, then deliberately removes exclusion labels and retains/adds `starbridge:ready`. Starbridge does not verify reset safety. Preserve previous comments and resource references, and add a reset comment explaining why a fresh dispatch is safe and what happened to earlier resources. Exact launch-failure breadcrumbs and failure output remain to be decided.
+If dispatch fails or crashes after the marker is written, retain it for manual inspection rather than automatically relaunching. The human checks what exists before deliberately resetting a failed dispatch. To reset, the human first inspects retained sessions/worktrees and ensures an earlier agent will not continue the same work, then deliberately removes exclusion labels and retains/adds `starbridge:ready`. Starbridge does not verify reset safety. Preserve previous comments and resource references, and add a reset comment explaining why a fresh dispatch is safe and what happened to earlier resources. Launch-failure records and reporting follow the contract in section 8.
 
-The earlier convention that agent-reported PR handoff removes `starbridge:ready` remains the baseline. `starbridge:started` stays present regardless; exact agent update ordering remains for the reporting decision.
+`starbridge:handoff` replaces the earlier `starbridge:done` name, including in eligibility rules; v0.1 requires no old-label support. A possible later use of done with autonomous merging is outside this version, not a settled future design. Handoff removes ready and always retains started, in the order specified below.
 
 ## 6. Questions and manual resumption
 
-When blocked, the agent comments on the issue with the question or blocker and adds `starbridge:hitl`. Its Herdr/pi session and worktree may remain available; no confirmed stopping is required.
+Starbridge also attempts to add `starbridge:hitl` after a failed or uncertain launch. In that case an agent session may not exist. The human inspects the issue, any retained Herdr/pi session, and local launch logs before resuming or resetting dispatch.
+
+When blocked or requesting permission, the agent first posts an issue comment with the blocker, relevant evidence, and the specific answer or action needed, then adds `starbridge:hitl`. It must not guess permission or continue work dependent on the missing answer. Its Herdr/pi session and worktree may remain available; no confirmed stopping is required.
 
 The human supplies the answer, resumes the existing agent directly in Herdr, and manually removes `starbridge:hitl`. Removing the label does not trigger another launch because `starbridge:started` remains present.
 
@@ -86,25 +88,45 @@ Starbridge does not poll for replies, deliver answers, resume sessions, detect h
 
 ## 7. PR handoff and trust boundary
 
-The agent owns checks, commits, pushes, PR creation, and reporting. It is instructed to run the relevant repository checks and include their results in its handoff. The human reviews the PR and CI and merges manually.
+The agent owns checks, commits, pushes, PR creation, and reporting. Repository instructions determine the workflow and checks; use existing repository scripts and check configuration as applicable. Report check commands and results, or explain why no applicable checks were found or run, including documentation-only work. Never report unrun checks as passed. The human reviews the PR and CI and merges manually.
 
-An agent-created PR and reported check summary are sufficient for the reduced MVP's handoff model. Starbridge does not independently execute checks, inspect the final revision, validate label claims, watch CI, or perform a repair loop.
+Handoff requires completed requested work in a non-draft PR ready for human review. Failing checks are permitted if prominently disclosed; draft PRs, incomplete work, and missing PRs do not qualify. The agent asks for human input when unable to proceed. Starbridge does not independently execute checks, inspect the final revision, validate label claims, watch CI, or perform a repair loop.
+
+The PR links to the issue and includes a change summary, check commands/results, and known failures or limitations. Publish in this order: push changes, create the review-ready PR, post an issue comment with the PR link and short check summary, add `starbridge:handoff`, then remove `starbridge:ready`. Always retain `starbridge:started`. The human still removes `starbridge:hitl` when resuming.
+
+If commenting, pushing, PR creation, or label updates fail, preserve local work. Report the failed operation, what succeeded, what remains, and recovery guidance in the existing session; use an issue comment where possible. Never claim publication or handoff succeeded when it failed. Do not undo published work. No mandatory retry loop or automatic replacement session is required.
+
+These instructions are settled in [Define the minimal agent question and PR handoff instructions](https://github.com/smotastic/starbridge/issues/6#issuecomment-5568359394).
 
 A comment, label, idle terminal, or PR is not proof that all mission processes have stopped or that the work is correct. The system makes no such guarantee. If an agent crashes, stalls, or forgets to report, the issue can remain `starbridge:started` until the human inspects it.
 
-The agent must not merge. This is an instruction in a trusted environment, not a claim of capability enforcement. How missing checks, failing checks, documentation-only tasks, or failed PR creation should be reported is still an open decision.
+The agent must not merge. This is an instruction in a trusted environment, not a claim of capability enforcement.
 
 ## 8. Launch and runtime feasibility
 
 [Verify Herdr and pi capabilities required by the MVP](https://github.com/smotastic/starbridge/issues/2) records the versioned [runtime capability research](docs/research/herdr-pi-capabilities.md). Its launch, prompt delivery, workspace identity, retained-session, and ARM findings remain relevant. Its extension, stop-confirmation, and supervision-recovery options are historical alternatives, not MVP requirements.
 
-Launch needs bounded, observable success/failure behavior. Herdr readiness or prompt submission is not proof that the task was received exactly once or eventually completed. The remaining launch decision must define the smallest honest CLI success criterion, partial-failure handling, and duplicate-launch precautions without reintroducing a supervisor.
+The launch contract is settled in [Define the starter launch boundary and partial-failure behavior](https://github.com/smotastic/starbridge/issues/9#issuecomment-5600986986).
+
+Launch success requires Herdr confirmation of pi readiness in the dedicated worktree, successful prompt submission, and GitHub confirmation of the comment with session, branch, and worktree references. This confirms launch steps, not exactly-once task receipt, continued agent activity, or task completion.
+
+Record each external operation locally before starting it, then record its confirmed result. Retain the issue identity, times, intended resource names, returned references, and failure details. A missing result means the outcome is unknown and needs manual inspection. If a local record update fails, stop before the next launch step.
+
+A failure stops further launch steps. After issue selection, attempt both an issue comment with confirmed steps, failures, uncertainty, references, and recovery guidance, and the `starbridge:hitl` label. Record failed GitHub reporting locally where possible. Before selection, only local reporting is possible.
+
+If writing started fails or its response is uncertain, do not create a worktree or launch pi. Never remove a marker that may have been written. Later runs use normal eligibility rules. After started is confirmed, retain it and all created resources after any failure. Never automatically repeat uncertain prompt submission, launch a replacement, stop an agent, or clear the marker.
+
+If prompt submission succeeds but publishing references fails, report `Prompt submitted; launch record incomplete` and return an unsuccessful command result. The agent may continue. A timeout does not prove that an operation had no effect.
+
+The preferred inspection order is the GitHub issue, any retained Herdr/pi session, then persistent local launch logs. A GitHub outage or sudden crash can prevent issue updates; a crash can also prevent a final log entry. An operation recorded before the crash without a confirmed result remains unknown. These limits are accepted. No automatic GitHub repair runs later. Logs describe launch attempts, not current agent progress.
 
 No agent-lifetime tracking, automatic reconciliation after a restart, or automatic replacement/resumption is required. Retained resources and incomplete dispatches are inspected and recovered manually.
 
 ## 9. CLI and scheduling
 
 The core operation is `starbridge run`: attempt to launch one eligible issue, record the references, then exit.
+
+A read-only `starbridge logs` command is required for the human or their agent to inspect persistent local launch records. It must not repair, resume, replay, or launch work. Its options, output, and log location remain for the CLI decision.
 
 The remaining operator decision will determine the minimal setup/configuration, preflight checks, output, exit statuses, and launch-time bounds. Extra `init`, `status`, `stop`, `resume`, or cleanup commands are not inherited requirements from the original specification.
 
@@ -114,8 +136,6 @@ Scheduling stays external, for example manual invocation, cron, or a systemd tim
 
 The map's open child tickets are authoritative for remaining work. Areas still requiring decisions are:
 
-- [Define the starter launch boundary and partial-failure behavior](https://github.com/smotastic/starbridge/issues/9).
-- [Define the minimal agent question and PR handoff instructions](https://github.com/smotastic/starbridge/issues/6).
 - [Set the minimal starter CLI and setup contract](https://github.com/smotastic/starbridge/issues/7).
 - [Agree the starter release-proof scenarios and scope completeness](https://github.com/smotastic/starbridge/issues/10).
 
